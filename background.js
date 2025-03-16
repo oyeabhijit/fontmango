@@ -2,7 +2,7 @@
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "fontScanner",
-    title: "Scan Font Details",
+    title: "Font Mango",
     contexts: ["selection"]
   });
 });
