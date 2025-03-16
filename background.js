@@ -1,75 +1,56 @@
+// background.js (updated)
 const createSubMenu = (fontData) => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "mainMenu",
-      title: "FontMango",
+      title: "FontMango Scan",
       contexts: ["selection"]
     });
 
-    for (const [property, value] of Object.entries(fontData)) {
+    Object.entries(fontData).forEach(([property, value]) => {
       chrome.contextMenus.create({
         parentId: "mainMenu",
         id: property,
         title: `${property}: ${value || 'Null'}`,
         contexts: ["selection"]
       });
-    }
+    });
   });
 };
-
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "mainMenu",
-    title: "FontMango",
-    contexts: ["selection"]
-  });
-});
-
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === "mainMenu") {
-    try {
-      const [result] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: getFontDetails
-      });
-      
-      if (result.result) {
-        createSubMenu(result.result);
-      }
-    } catch (error) {
-      console.error("Font scan error:", error);
-    }
-  }
-});
 
 function getFontDetails() {
   const selection = window.getSelection();
   if (!selection.rangeCount) return null;
 
+  // Get deepest node in selection
   const range = selection.getRangeAt(0);
-  const element = range.startContainer.parentElement;
-  const style = window.getComputedStyle(element);
+  let node = range.startContainer;
 
-  // Track up DOM tree until we find explicit font-family
-  let fontFamily = style.fontFamily;
-  if (fontFamily === "serif" || fontFamily === "sans-serif") {
-    let parent = element.parentElement;
-    while (parent) {
-      const parentStyle = window.getComputedStyle(parent);
-      if (parentStyle.fontFamily !== "serif" && 
-          parentStyle.fontFamily !== "sans-serif") {
-        fontFamily = parentStyle.fontFamily;
-        break;
-      }
-      parent = parent.parentElement;
-    }
+  // Handle text nodes
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
   }
 
+  // Find first element with explicit font declaration
+  const findFontSource = (element) => {
+    const style = window.getComputedStyle(element);
+    if (!element || element === document.documentElement) return style;
+    
+    // Check for actual font declaration
+    const hasFontFamily = style.fontFamily !== 'serif' && 
+                         style.fontFamily !== 'sans-serif' &&
+                         style.fontFamily !== 'monospace';
+    
+    return hasFontFamily ? style : findFontSource(element.parentElement);
+  };
+
+  const computedStyle = findFontSource(node);
+  
   return {
-    "Font Family": fontFamily || 'Null',
-    "Font Size": style.fontSize || 'Null',
-    "Font Weight": style.fontWeight || 'Null',
-    "Line Height": style.lineHeight || 'Null',
-    "Letter Spacing": style.letterSpacing || 'Null'
+    "Font Family": computedStyle.fontFamily.replace(/"/g, ''),
+    "Font Size": computedStyle.fontSize,
+    "Font Weight": computedStyle.fontWeight,
+    "Line Height": computedStyle.lineHeight,
+    "Letter Spacing": computedStyle.letterSpacing
   };
 }
