@@ -1,3 +1,4 @@
+// background.js
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "fontScanner",
@@ -6,33 +7,37 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "fontScanner") {
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      function: scanFontDetails
-    });
+    try {
+      const [response] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: getFontDetails,
+      });
+      
+      // Display results in console (or modify to show in popup)
+      console.log("Font Details:", response.result);
+      alert(JSON.stringify(response.result, null, 2));
+    } catch (error) {
+      console.error("Font scan failed:", error);
+    }
   }
 });
 
-function scanFontDetails() {
+function getFontDetails() {
   const selection = window.getSelection();
-  if (!selection.rangeCount) return;
+  if (!selection.rangeCount) return null;
 
-  const range = selection.getRangeAt(0);
-  const parentElement = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-    ? range.commonAncestorContainer
-    : range.commonAncestorContainer.parentElement;
+  const element = selection.getRangeAt(0)
+                  .commonAncestorContainer.parentElement;
 
-  const computedStyle = window.getComputedStyle(parentElement);
+  const style = window.getComputedStyle(element);
   
-  const fontDetails = {
-    fontFamily: computedStyle.fontFamily || null,
-    fontSize: computedStyle.fontSize || null,
-    fontWeight: computedStyle.fontWeight || null,
-    lineHeight: computedStyle.lineHeight || null,
-    letterSpacing: computedStyle.letterSpacing || null
+  return {
+    fontFamily: style.fontFamily || null,
+    fontSize: style.fontSize || null,
+    fontWeight: style.fontWeight || null,
+    lineHeight: style.lineHeight || null,
+    letterSpacing: style.letterSpacing || null
   };
-
-  alert(JSON.stringify(fontDetails, null, 2));
 }
